@@ -8,6 +8,9 @@ import numpy as np
 from xlsxwriter.utility import xl_col_to_name
 import io
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
+
 # Настройка логирования
 def setup_logger():
     logger = logging.getLogger('currency_analysis')
@@ -26,12 +29,12 @@ def setup_logger():
 
 logger = setup_logger()
 
-def get_all_data(db_path):
+def get_all_data(DB_PATH):
     """Получает все данные из БД"""
     conn = None
     try:
-        logger.info(f"Подключение к базе данных: {db_path}")
-        conn = sqlite3.connect(db_path)
+        logger.info(f"Подключение к базе данных: {DB_PATH}")
+        conn = sqlite3.connect(DB_PATH)
         logger.info("Подключение к базе данных успешно")
         
         query = """

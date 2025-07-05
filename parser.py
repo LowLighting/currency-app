@@ -8,6 +8,9 @@ import logging
 import sys
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
+
 def setup_logger():
     """Настраивает логгер для Docker"""
     logger = logging.getLogger('currency_parser')
@@ -69,17 +72,17 @@ def fetch_currency_data(url, max_retries=3):
 #     return False
 
 
-def check_database(db_path):
+def check_database(DB_PATH):
     """Проверяет существование и структуру БД"""
     table_name = "exchange_rates"
     
     # Проверяем существование файла БД
-    if not os.path.exists(db_path):
+    if not os.path.exists(DB_PATH):
         logger.error("База данных не найдена! Запустите init_db.py для инициализации")
         return False
     
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # Проверяем существование таблицы
