@@ -1,0 +1,23 @@
+version: '1'
+services:
+  web:
+    type: web
+    build: .
+    ports:
+      80:5000
+    volumes:
+      - data:/app/data
+
+  parser:
+    type: job
+    schedule: "0 5-14 * * *"  # Каждый час с 5:00 до 14:00 UTC (8:00-17:00 МСК)
+    build: .
+    commands:
+      - python parser.py
+    volumes:
+      - data:/app/data
+
+volumes:
+  data:
+    name: currency-data
+    size: 1GB
