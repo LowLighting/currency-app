@@ -31,6 +31,52 @@ def setup_logger():
 
 logger = setup_logger()
 
+def init_database(db_path):
+    """Инициализирует базу данных, создает таблицу если не существует"""
+    try:
+        # Создаем директорию если не существует
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Проверяем существование таблицы
+        cursor.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='exchange_rates'
+        """)
+        table_exists = cursor.fetchone() is not None
+        
+        if not table_exists:
+            logger.info("Создание таблицы exchange_rates")
+            cursor.execute("""
+            CREATE TABLE exchange_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_time TEXT NOT NULL,
+                name_currency TEXT NOT NULL,
+                buying_rate REAL NOT NULL,
+                selling_rate REAL NOT NULL,
+                type_currency TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            # Создаем индексы
+            cursor.execute("CREATE INDEX idx_datetime ON exchange_rates (date_time)")
+            cursor.execute("CREATE INDEX idx_currency ON exchange_rates (name_currency)")
+            cursor.execute("CREATE INDEX idx_type ON exchange_rates (type_currency)")
+            conn.commit()
+            logger.info("Таблица и индексы созданы")
+        else:
+            logger.info("Таблица exchange_rates уже существует")
+            
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Ошибка инициализации БД: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 def get_moscow_time():
     """Возвращает текущее время в Москве в формате ГГГГ-ММ-ДД ЧЧ:ММ"""
     moscow_tz = pytz.timezone('Europe/Moscow')
@@ -54,60 +100,6 @@ def fetch_currency_data(url, max_retries=3):
             if attempt < max_retries - 1:
                 time.sleep(2)
     return None
-
-# def should_run_parsing():
-#     """Определяет, нужно ли запускать парсинг в текущее время по МСК"""
-#     # Текущее время в МСК
-#     msk_tz = pytz.timezone('Europe/Moscow')
-#     now = datetime.now(msk_tz)
-#     current_hour = now.hour
-    
-#     # Проверяем временные интервалы:
-#     # - Каждый час с 8 до 13 (включительно)
-#     # - Один раз в 17:00
-#     if 8 <= current_hour <= 13:
-#         return True
-#     elif current_hour == 17:
-#         return True
-#     return False
-
-
-def check_database(DB_PATH):
-    """Проверяет существование и структуру БД"""
-    table_name = "exchange_rates"
-    
-    # Проверяем существование файла БД
-    if not os.path.exists(DB_PATH):
-        logger.error("База данных не найдена! Запустите init_db.py для инициализации")
-        return False
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Проверяем существование таблицы
-        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
-        if not cursor.fetchone():
-            logger.error(f"Таблица {table_name} не найдена в БД")
-            return False
-            
-        # Проверяем наличие необходимых колонок
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = [col[1] for col in cursor.fetchall()]
-        required_columns = ['date_time', 'name_currency', 'buying_rate', 'selling_rate', 'type_currency']
-        
-        for col in required_columns:
-            if col not in columns:
-                logger.error(f"Колонка {col} отсутствует в таблице")
-                return False
-                
-        return True
-    except sqlite3.Error as e:
-        logger.error(f"Ошибка проверки БД: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
 
 def parse_currency_data():
     """Основная функция парсинга данных"""
@@ -225,14 +217,9 @@ def main():
     """Основная функция для парсинга и сохранения"""
     logger.info("Запуск парсера валютных курсов")
     
-    # Проверяем, нужно ли запускать парсинг по расписанию
-    # if not should_run_parsing():
-    #     logger.info("Текущее время не входит в расписание парсинга. Завершение.")
-    #     return
-    
-    # Путь к базе данных в volume
-    db_path = ".\data\currency_data.db"
-    if not check_database(db_path):
+    # Инициализация базы данных
+    if not init_database(DB_PATH):
+        logger.error("Не удалось инициализировать базу данных")
         return
     
     # Парсинг данных
@@ -240,7 +227,7 @@ def main():
     
     if currency_data:
         # Сохранение в БД
-        saved_count = save_to_database(currency_data, db_path)
+        saved_count = save_to_database(currency_data, DB_PATH)
         if saved_count > 0:
             logger.info("Данные успешно сохранены")
         else:
