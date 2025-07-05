@@ -228,7 +228,7 @@ def main():
     #     return
     
     # Путь к базе данных в volume
-    db_path = "D:\currency-app\data\currency_data.db"
+    db_path = ".\data\currency_data.db"
     if not check_database(db_path):
         return
     

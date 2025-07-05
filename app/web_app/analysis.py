@@ -26,7 +26,7 @@ def setup_logger():
 
 logger = setup_logger()
 
-def get_all_data(db_path=r'D:\currency-app\data\currency_data.db'):
+def get_all_data(db_path):
     """Получает все данные из БД"""
     conn = None
     try:
@@ -275,7 +275,7 @@ def generate_report():
     
     try:
         # Путь к базе данных
-        db_path = r"D:\currency-app\data\currency_data.db"
+        db_path = ".\data\currency_data.db"
         
         # Получаем данные
         df = get_all_data(db_path)
