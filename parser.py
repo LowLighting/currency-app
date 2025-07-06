@@ -8,11 +8,12 @@ import logging
 import sys
 import os
 
-# Исправленный абсолютный путь
-DB_PATH = "/app/data/courses.db"
+# Путь к базе данных (должен совпадать с render.yaml)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
 
 def setup_logger():
-    """Настраивает логгер для Docker"""
+    """Настраивает логгер для Render"""
     logger = logging.getLogger('currency_parser')
     logger.setLevel(logging.INFO)
     
@@ -29,21 +30,40 @@ def setup_logger():
 
 logger = setup_logger()
 
+def connect_db_with_retry(retries=3, delay=1):
+    """Подключается к БД с повторными попытками при блокировке"""
+    for attempt in range(retries):
+        try:
+            conn = sqlite3.connect(
+                DB_PATH,
+                timeout=15  # Увеличенный timeout для Render
+            )
+            logger.info(f"Успешное подключение к БД (попытка {attempt+1})")
+            return conn
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < retries - 1:
+                logger.warning(f"БД заблокирована, повторная попытка через {delay} сек...")
+                time.sleep(delay)
+            else:
+                logger.error(f"Критическая ошибка подключения: {e}")
+                raise
+    return None
+
 def init_database():
-    """Инициализирует базу данных только при первом запуске контейнера"""
-    # Проверяем существование файла БД
+    """Инициализирует базу данных с защитой от параллельного доступа"""
     if os.path.exists(DB_PATH):
         logger.info(f"База данных уже существует: {DB_PATH}")
         return True
 
     logger.info(f"Создание новой БД: {DB_PATH}")
-    # os.makedirs(DB_DIR, exist_ok=True)
     
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db_with_retry()
+        if conn is None:
+            return False
+            
         cursor = conn.cursor()
         
-        # Создаем таблицу
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS exchange_rates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,17 +76,20 @@ def init_database():
         )
         """)
         
-        # Создаем индексы
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_datetime ON exchange_rates (date_time)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_currency ON exchange_rates (name_currency)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_type ON exchange_rates (type_currency)")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """)
+        
+        cursor.execute("""
+        INSERT OR IGNORE INTO metadata (key, value)
+        VALUES ('db_version', '1.0')
+        """)
         
         conn.commit()
         logger.info("Структура БД успешно создана")
-        
-        # Устанавливаем права
-        os.chmod(DB_PATH, 0o660)
-        # os.chmod(DB_DIR, 0o770)
         return True
         
     except sqlite3.Error as e:
@@ -77,26 +100,19 @@ def init_database():
             conn.close()
 
 def check_database_initialized():
-    """Проверяет инициализацию БД без создания новой"""
+    """Проверяет инициализацию БД с использованием metadata"""
     if not os.path.exists(DB_PATH):
         logger.error(f"База данных не найдена: {DB_PATH}")
         return False
     
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Проверяем существование таблицы
-        cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name='exchange_rates'
-        """)
-        
-        if not cursor.fetchone():
-            logger.error("Таблица exchange_rates не найдена в БД")
+        conn = connect_db_with_retry()
+        if conn is None:
             return False
             
-        return True
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM metadata WHERE key='db_version'")
+        return bool(cursor.fetchone())
     except sqlite3.Error as e:
         logger.error(f"Ошибка проверки БД: {e}")
         return False
@@ -118,7 +134,7 @@ def fetch_currency_data(url, max_retries=3):
     for attempt in range(max_retries):
         try:
             logger.info(f"Попытка {attempt+1}/{max_retries}: запрос к {url}")
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             logger.info("Данные успешно получены")
             return response.text
@@ -141,98 +157,89 @@ def parse_currency_data():
         return []
 
     soup = BeautifulSoup(html_content, 'html.parser')
-    best_rates = soup.find_all('span', class_="accent")
     
-    if len(best_rates) < 6:
-        logger.warning(f"Найдено недостаточно элементов курсов: {len(best_rates)}")
-        return []
-
-    best_courses = {
-        "Дата и время": [formatted_datetime] * 3,
-        "Наименование валюты": ['USD', 'EUR', 'RUB 100'],
-        "Курс продажи": [
-            best_rates[0].text.strip(), 
-            best_rates[2].text.strip(), 
-            best_rates[4].text.strip()
-        ],
-        "Курс покупки": [
-            best_rates[1].text.strip(), 
-            best_rates[3].text.strip(), 
-            best_rates[5].text.strip()
-        ],
-        "Название курса": ['Лучший курс'] * 3
-    }
-
-    belveb_courses = []
-    rows = soup.select('tr.currencies-courses__row-main')
+    # Упрощенный и более надежный парсинг
+    currencies = []
     
-    for row in rows:
-        bank_name_td = row.select_one('td:first-child')
-        if not bank_name_td:
-            continue
+    # Парсинг лучших курсов
+    best_rates = []
+    for span in soup.select('span.accent'):
+        best_rates.append(span.text.strip())
+    
+    if len(best_rates) >= 6:
+        currencies.append({
+            "date_time": formatted_datetime,
+            "bank_name": "Лучший курс",
+            "rates": [
+                {"currency": "USD", "buy": best_rates[1], "sell": best_rates[0]},
+                {"currency": "EUR", "buy": best_rates[3], "sell": best_rates[2]},
+                {"currency": "RUB 100", "buy": best_rates[5], "sell": best_rates[4]}
+            ]
+        })
 
-        bank_text = bank_name_td.get_text().lower()
-        if 'belveb.by' in bank_text or 'belveb.svg' in str(bank_name_td):
-            currency_cells = row.select('td.currencies-courses__currency-cell span')
-            
-            if len(currency_cells) >= 6:
-                courses = {
-                    "Дата и время": [formatted_datetime] * 3,
-                    "Наименование валюты": ['USD', 'EUR', 'RUB 100'],
-                    "Курс продажи": [
-                        currency_cells[0].get_text(strip=True),
-                        currency_cells[2].get_text(strip=True),
-                        currency_cells[4].get_text(strip=True)
-                    ],
-                    "Курс покупки": [
-                        currency_cells[1].get_text(strip=True),
-                        currency_cells[3].get_text(strip=True),
-                        currency_cells[5].get_text(strip=True)
-                    ],
-                    "Название курса": [bank_name_td.get_text(strip=True)] * 3
-                }
-                belveb_courses.append(courses)
+    # Парсинг БелВЭБ
+    belveb_row = None
+    for row in soup.select('tr.currencies-courses__row-main'):
+        if 'belveb' in row.get_text().lower():
+            belveb_row = row
+            break
 
-    belveb_courses.append(best_courses)
-    logger.info(f"Собрано наборов данных: {len(belveb_courses)}")
-    return belveb_courses
+    if belveb_row:
+        cells = belveb_row.select('td.currencies-courses__currency-cell span')
+        if len(cells) >= 6:
+            currencies.append({
+                "date_time": formatted_datetime,
+                "bank_name": "БелВЭБ",
+                "rates": [
+                    {"currency": "USD", "buy": cells[1].text.strip(), "sell": cells[0].text.strip()},
+                    {"currency": "EUR", "buy": cells[3].text.strip(), "sell": cells[2].text.strip()},
+                    {"currency": "RUB 100", "buy": cells[5].text.strip(), "sell": cells[4].text.strip()}
+                ]
+            })
+
+    logger.info(f"Собрано банков: {len(currencies)}")
+    return currencies
 
 def save_to_database(data):
-    """Сохраняет данные в базу данных"""
+    """Сохраняет данные в базу данных с защитой от блокировок"""
+    if not data:
+        logger.warning("Нет данных для сохранения")
+        return 0
+
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = connect_db_with_retry()
+        if conn is None:
+            return 0
+            
         cursor = conn.cursor()
-        
-        sql = """
-        INSERT INTO exchange_rates 
-        (date_time, name_currency, buying_rate, selling_rate, type_currency) 
-        VALUES (?, ?, ?, ?, ?)
-        """
-        
         inserted_rows = 0
         
-        for bank_data in data:
-            for i in range(3):
+        for bank in data:
+            for rate in bank["rates"]:
                 try:
-                    buying = float(bank_data["Курс покупки"][i].replace(',', '.'))
-                    selling = float(bank_data["Курс продажи"][i].replace(',', '.'))
+                    buy = float(rate["buy"].replace(',', '.'))
+                    sell = float(rate["sell"].replace(',', '.'))
                 except ValueError:
-                    logger.warning(f"Ошибка преобразования курсов: {bank_data['Курс покупки'][i]}, {bank_data['Курс продажи'][i]}")
+                    logger.warning(f"Ошибка преобразования курса: {rate}")
                     continue
                     
-                values = (
-                    bank_data["Дата и время"][i],
-                    bank_data["Наименование валюты"][i],
-                    buying,
-                    selling,
-                    bank_data["Название курса"][i]
-                )
-                cursor.execute(sql, values)
+                cursor.execute("""
+                INSERT INTO exchange_rates 
+                (date_time, name_currency, buying_rate, selling_rate, type_currency) 
+                VALUES (?, ?, ?, ?, ?)
+                """, (
+                    bank["date_time"],
+                    rate["currency"],
+                    buy,
+                    sell,
+                    bank["bank_name"]
+                ))
                 inserted_rows += 1
         
         conn.commit()
         logger.info(f"Сохранено записей: {inserted_rows}")
         return inserted_rows
+        
     except sqlite3.Error as e:
         logger.error(f"Ошибка сохранения в БД: {e}")
         return 0
@@ -245,36 +252,31 @@ def main():
     logger.info("Запуск парсера валютных курсов")
     logger.info(f"Используется БД: {DB_PATH}")
     
-    # Проверка прав доступа
-    # if not os.access(DB_DIR, os.W_OK):
-    #     logger.error(f"Нет прав на запись в директорию: {DB_DIR}")
-    #     return
-    
-    # Инициализация БД только при первом запуске
+    # Проверка и инициализация БД
     if not os.path.exists(DB_PATH):
         logger.info("Первоначальная инициализация БД")
         if not init_database():
             logger.error("Не удалось инициализировать базу данных")
             return
-    else:
-        logger.info("Проверка структуры БД")
-        if not check_database_initialized():
-            logger.error("Проблемы с структурой БД")
-            return
+    elif not check_database_initialized():
+        logger.error("Проблемы с структурой БД")
+        return
     
     # Парсинг данных
+    start_time = time.time()
     currency_data = parse_currency_data()
+    parse_duration = time.time() - start_time
     
+    # Сохранение данных
     if currency_data:
+        save_start = time.time()
         saved_count = save_to_database(currency_data)
-        logger.info(f"Сохранено {saved_count} записей")
+        save_duration = time.time() - save_start
+        logger.info(f"Сохранено {saved_count} записей за {save_duration:.2f} сек")
     else:
         logger.warning("Нет данных для сохранения")
     
-    # Проверка размера БД
-    if os.path.exists(DB_PATH):
-        size = os.path.getsize(DB_PATH) / 1024
-        logger.info(f"Размер БД: {size:.2f} KB")
+    logger.info(f"Общее время работы: {time.time() - start_time:.2f} сек")
 
 if __name__ == "__main__":
     main()

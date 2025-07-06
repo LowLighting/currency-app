@@ -8,6 +8,7 @@ import numpy as np
 from xlsxwriter.utility import xl_col_to_name
 import io
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
 
