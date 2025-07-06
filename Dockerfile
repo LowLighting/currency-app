@@ -1,42 +1,39 @@
 FROM python:3.10-slim
 
-# Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libsqlite3-dev \
+    wget \
+    libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Создаем не-root пользователя
-RUN addgroup --system app && adduser --system --no-create-home --ingroup app app
+# Создаем пользователя только для чтения (UID 1001)
+RUN addgroup --system --gid 1001 reader_group && \
+    adduser --system --uid 1001 --ingroup reader_group --no-create-home reader_user
 
-# Создаем рабочие директории
-RUN mkdir -p /app/data /app/templates
+# Создаем группу writer (GID 1000) и добавляем читателя в нее
+RUN addgroup --gid 1000 writer_group && \
+    adduser reader_user writer_group
+
+RUN mkdir -p /app/templates
 WORKDIR /app
 
-# Сначала копируем зависимости
 COPY requirements.txt .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем ВСЕ остальные файлы
 COPY . .
 
-# Устанавливаем права
-RUN chown -R app:app /app && \
-    chmod -R 777 /app/data
+# Устанавливаем безопасные права
+RUN chown -R 1001:1001 /app && \
+    find /app -type d -exec chmod 755 {} \; && \
+    find /app -type f -exec chmod 644 {} \;
 
-# Healthcheck (для веб-сервиса)
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s \
-    CMD curl -f http://localhost:5000/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:5000/health || exit 1
 
-# Переключаемся на непривилегированного пользователя
-USER app
+USER reader_user
 
-# Порт приложения
 EXPOSE 5000
 
-# Команда запуска веб-сервера
 CMD ["python", "app.py"]

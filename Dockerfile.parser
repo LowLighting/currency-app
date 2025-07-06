@@ -1,35 +1,30 @@
 FROM python:3.10-slim
 
-# Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
     curl \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Создаем не-root пользователя
-RUN addgroup --system app && adduser --system --no-create-home --ingroup app app
+# Создаем пользователя с фиксированным UID
+RUN addgroup --system --gid 1000 app && \
+    adduser --system --uid 1000 --ingroup app --no-create-home app
 
-# Создаем рабочие директории
-RUN mkdir -p /app/data
 WORKDIR /app
 
-# Копируем зависимости
 COPY requirements.txt .
-
-# Устанавливаем зависимости
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем код
+# Копируем код и entrypoint
 COPY parser.py .
+COPY entrypoint.sh .
 
-# Устанавливаем права на директорию данных
-RUN chown -R app:app /app && \
-    chmod -R 775 /app/data  # Более безопасные права
+# Устанавливаем права
+RUN chown -R 1000:1000 /app && \
+    chmod +x entrypoint.sh
 
-# Переключаемся на непривилегированного пользователя
 USER app
 
-# Команда запуска парсера
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python", "parser.py"]
