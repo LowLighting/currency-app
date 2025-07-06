@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -U pip && \
 # Копируем код и базу данных
 COPY parser.py .
 COPY entrypoint.sh .
-COPY data /app/data  # <--- Вот это добавь
+COPY data /app/data
 
 RUN chown -R 1000:1000 /app && \
     chmod +x entrypoint.sh
