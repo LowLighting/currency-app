@@ -9,12 +9,12 @@ services:
     volumes:
       - data:/app/data
 
-jobs:  # <-- ДОЛЖЕН БЫТЬ РАЗДЕЛ jobs, НЕ services!
+jobs:  # ← КРИТИЧЕСКИ ВАЖНО: раздел должен называться JOBS
   parser:
-    type: cron  # <-- Ключевое исправление: type должен быть "cron"
+    type: cron  # ← Должно быть "cron" вместо "job"
     schedule: "0 5-14 * * *"
     build: .
-    command: ["python", "parser.py"]  # <-- Используйте "command" вместо "commands"
+    command: ["python", "parser.py"]  # ← "command" вместо "commands"
     volumes:
       - data:/app/data
 
