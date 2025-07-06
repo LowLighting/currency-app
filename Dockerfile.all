@@ -1,11 +1,12 @@
 FROM python:3.10-slim
 
-# Устанавливаем зависимости
-RUN apt-get update && apt-get install -y \
+# Устанавливаем зависимости с явным указанием yes
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     wget \
     curl \
     sqlite3 \
-    libsqlite3-dev \
+    libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -17,32 +18,28 @@ RUN addgroup --system --gid 1000 app && \
 RUN mkdir -p /app/templates
 WORKDIR /app
 
-# Копируем зависимости и устанавливаем
+# Копируем зависимости отдельно для лучшего кэширования
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения
+# Копируем код приложения (без данных)
 COPY app.py parser.py entrypoint.sh ./
 COPY templates/ /app/templates/
 
-# Копируем папку с данными (включая существующую БД)
+# Копируем папку с данными отдельно
 COPY data/ /app/data/
 
-# Устанавливаем правильные права только на папку /app/data
-RUN chown -R 1000:1000 /app/data && \
-    chmod -R 770 /app/data && \
-    chmod +x entrypoint.sh
-
-# Основные права на приложение
+# Устанавливаем правильные права (без рекурсивного chmod на всё)
 RUN chown -R 1000:1000 /app && \
-    find /app -type d -exec chmod 755 {} \; && \
-    find /app -type f -exec chmod 644 {} \; && \
-    chmod +x entrypoint_.sh
+    chmod +x entrypoint_.sh && \
+    chmod 770 /app/data && \
+    find /app/data -type d -exec chmod 770 {} \; && \
+    find /app/data -type f -exec chmod 660 {} \;
 
 USER app
 EXPOSE 5000
 
 # Точка входа и команда по умолчанию
 ENTRYPOINT ["/app/entrypoint_.sh"]
-CMD ["web"]  # Режим по умолчанию - веб-сервер
+CMD ["web"]
