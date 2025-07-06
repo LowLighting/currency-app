@@ -33,9 +33,10 @@ logger = setup_logger()
 
 def init_database():
     """Инициализирует базу данных, создает таблицу если не существует"""
+    conn = None  # КРИТИЧНО: инициализируем переменную перед try
     try:
-        # Создаем директорию если не существует
-        
+        # Убедитесь, что DB_PATH ведет в доступную для записи директорию (например, /data/)
+        # Пример: DB_PATH = '/data/database.db'
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
@@ -73,7 +74,7 @@ def init_database():
         logger.error(f"Ошибка инициализации БД: {e}")
         return False
     finally:
-        if conn:
+        if conn:  # Безопасная проверка благодаря инициализации
             conn.close()
 
 def get_moscow_time():
