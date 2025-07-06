@@ -1,21 +1,35 @@
 FROM python:3.10-slim
 
-# Создаем директорию для данных с правильными правами
-RUN mkdir -p /data && chmod 777 /data
+# Устанавливаем системные зависимости
+RUN apt-get update && apt-get install -y \
+    curl \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Устанавливаем рабочую директорию
+# Создаем не-root пользователя
+RUN addgroup --system app && adduser --system --no-create-home --ingroup app app
+
+# Создаем рабочие директории
+RUN mkdir -p /app/data
 WORKDIR /app
 
-# Копируем и устанавливаем зависимости
+# Копируем зависимости
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir -U pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Копируем код
 COPY parser.py .
 
-# Переключаемся на непривилегированного пользователя (рекомендуется для безопасности)
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-USER appuser
+# Устанавливаем права на директорию данных
+RUN chown -R app:app /app && \
+    chmod -R 775 /app/data  # Более безопасные права
 
-# Запускаем приложение
+# Переключаемся на непривилегированного пользователя
+USER app
+
+# Команда запуска парсера
 CMD ["python", "parser.py"]
