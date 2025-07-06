@@ -31,13 +31,12 @@ def setup_logger():
 
 logger = setup_logger()
 
-def init_database(db_path):
+def init_database():
     """Инициализирует базу данных, создает таблицу если не существует"""
     try:
         # Создаем директорию если не существует
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         # Проверяем существование таблицы
@@ -170,10 +169,10 @@ def parse_currency_data():
     logger.info(f"Собрано наборов данных: {len(belveb_courses)}")
     return belveb_courses
 
-def save_to_database(data, db_path):
+def save_to_database(data):
     """Сохраняет данные в базу данных"""
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
         sql = """
@@ -218,7 +217,7 @@ def main():
     logger.info("Запуск парсера валютных курсов")
     
     # Инициализация базы данных
-    if not init_database(DB_PATH):
+    if not init_database():
         logger.error("Не удалось инициализировать базу данных")
         return
     
@@ -227,7 +226,7 @@ def main():
     
     if currency_data:
         # Сохранение в БД
-        saved_count = save_to_database(currency_data, DB_PATH)
+        saved_count = save_to_database(currency_data)
         if saved_count > 0:
             logger.info("Данные успешно сохранены")
         else:

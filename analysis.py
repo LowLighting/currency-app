@@ -278,10 +278,9 @@ def generate_report():
     
     try:
         # Путь к базе данных
-        db_path = ".\data\currency_data.db"
         
         # Получаем данные
-        df = get_all_data(db_path)
+        df = get_all_data(DB_PATH)
         if df is None or df.empty:
             logger.warning("Нет данных в базе")
             return None
