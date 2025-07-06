@@ -1,6 +1,21 @@
 FROM python:3.10-slim
+
+# Создаем директорию для данных с правильными правами
+RUN mkdir -p /data && chmod 777 /data
+
+# Устанавливаем рабочую директорию
 WORKDIR /app
+
+# Копируем и устанавливаем зависимости
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем код приложения
 COPY parser.py .
+
+# Переключаемся на непривилегированного пользователя (рекомендуется для безопасности)
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+USER appuser
+
+# Запускаем приложение
 CMD ["python", "parser.py"]
