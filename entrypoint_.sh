@@ -1,12 +1,23 @@
 #!/bin/sh
 set -e
 
-if [ "$1" = "parser" ]; then
-  echo "Запускаем парсер..."
-  python parser.py
-elif [ "$1" = "web" ]; then
-  echo "Запускаем веб-сервис..."
-  python app.py
-else
-  echo "Неизвестная команда: $1"
-  exit 1
+# Выбор режима работы на основе первого аргумента
+mode=${1:-web}
+
+case $mode in
+    web|app|server)
+        echo "Запуск веб-сервера"
+        exec python app.py
+        ;;
+    parser|job|worker)
+        echo "Запуск парсера"
+        exec python parser.py
+        ;;
+    *)
+        echo "Неизвестный режим: $mode"
+        echo "Доступные команды:"
+        echo "  web    - запуск веб-сервера"
+        echo "  parser - запуск парсера"
+        exit 1
+        ;;
+esac

@@ -1,33 +1,48 @@
 FROM python:3.10-slim
 
+# Устанавливаем зависимости
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     sqlite3 \
-    libsqlite3-0 \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Создаем пользователя
+# Создаем пользователя и группы
 RUN addgroup --system --gid 1000 app && \
     adduser --system --uid 1000 --ingroup app --no-create-home app
 
+# Создаем все необходимые директории
 RUN mkdir -p /app/templates
 WORKDIR /app
 
+# Копируем зависимости и устанавливаем
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Копируем код приложения
+COPY app.py parser.py entrypoint.sh ./
+COPY templates/ /app/templates/
 
+# Копируем папку с данными (включая существующую БД)
+COPY data/ /app/data/
+
+# Устанавливаем правильные права только на папку /app/data
+RUN chown -R 1000:1000 /app/data && \
+    chmod -R 770 /app/data && \
+    chmod +x entrypoint.sh
+
+# Основные права на приложение
 RUN chown -R 1000:1000 /app && \
+    find /app -type d -exec chmod 755 {} \; && \
+    find /app -type f -exec chmod 644 {} \; && \
     chmod +x entrypoint_.sh
 
 USER app
-
 EXPOSE 5000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-
-CMD ["web"]   # по умолчанию запускаем сервис
+# Точка входа и команда по умолчанию
+ENTRYPOINT ["/app/entrypoint_.sh"]
+CMD ["web"]  # Режим по умолчанию - веб-сервер
