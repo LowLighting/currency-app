@@ -8,23 +8,20 @@ import logging
 import sys
 import os
 
-# Исправленный абсолютный путь в Docker-окружении
+# Исправленный абсолютный путь
 DB_DIR = '/app/data'
 DB_PATH = os.path.join(DB_DIR, 'currency_data.db')
-os.makedirs(DB_DIR, exist_ok=True)  # Гарантируем существование директории
 
 def setup_logger():
     """Настраивает логгер для Docker"""
     logger = logging.getLogger('currency_parser')
     logger.setLevel(logging.INFO)
     
-    # Формат логов
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     
-    # Только консольный вывод для Docker
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
@@ -34,54 +31,79 @@ def setup_logger():
 logger = setup_logger()
 
 def init_database():
-    """Инициализирует базу данных только при первом запуске"""
+    """Инициализирует базу данных только при первом запуске контейнера"""
     # Проверяем существование файла БД
-    db_exists = os.path.exists(DB_PATH)
-    
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    if os.path.exists(DB_PATH):
+        logger.info(f"База данных уже существует: {DB_PATH}")
+        return True
+
+    logger.info(f"Создание новой БД: {DB_PATH}")
+    os.makedirs(DB_DIR, exist_ok=True)
     
     try:
-        if not db_exists:
-            logger.info("Создание новой базы данных и таблицы exchange_rates")
-            cursor.execute("""
-            CREATE TABLE exchange_rates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date_time TEXT NOT NULL,
-                name_currency TEXT NOT NULL,
-                buying_rate REAL NOT NULL,
-                selling_rate REAL NOT NULL,
-                type_currency TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """)
-            cursor.execute("CREATE INDEX idx_datetime ON exchange_rates (date_time)")
-            cursor.execute("CREATE INDEX idx_currency ON exchange_rates (name_currency)")
-            cursor.execute("CREATE INDEX idx_type ON exchange_rates (type_currency)")
-            conn.commit()
-            logger.info("База данных и таблицы успешно созданы")
-            
-            # Устанавливаем права (только для записи парсера)
-            os.chmod(DB_PATH, 0o660)  # Владелец и группа: чтение+запись
-            os.chmod(DB_DIR, 0o770)
-        else:
-            logger.info("База данных уже существует, проверка структуры...")
-            
-            # Проверяем существование таблицы
-            cursor.execute("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='exchange_rates'
-            """)
-            if not cursor.fetchone():
-                logger.error("Таблица exchange_rates отсутствует в существующей БД!")
-                return False
-                
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Создаем таблицу
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exchange_rates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_time TEXT NOT NULL,
+            name_currency TEXT NOT NULL,
+            buying_rate REAL NOT NULL,
+            selling_rate REAL NOT NULL,
+            type_currency TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        
+        # Создаем индексы
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_datetime ON exchange_rates (date_time)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_currency ON exchange_rates (name_currency)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_type ON exchange_rates (type_currency)")
+        
+        conn.commit()
+        logger.info("Структура БД успешно создана")
+        
+        # Устанавливаем права
+        os.chmod(DB_PATH, 0o660)
+        os.chmod(DB_DIR, 0o770)
         return True
+        
     except sqlite3.Error as e:
-        logger.error(f"Ошибка инициализации БД: {e}")
+        logger.error(f"Ошибка создания БД: {e}")
         return False
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+
+def check_database_initialized():
+    """Проверяет инициализацию БД без создания новой"""
+    if not os.path.exists(DB_PATH):
+        logger.error(f"База данных не найдена: {DB_PATH}")
+        return False
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Проверяем существование таблицы
+        cursor.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='exchange_rates'
+        """)
+        
+        if not cursor.fetchone():
+            logger.error("Таблица exchange_rates не найдена в БД")
+            return False
+            
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Ошибка проверки БД: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
 
 def get_moscow_time():
     """Возвращает текущее время в Москве в формате ГГГГ-ММ-ДД ЧЧ:ММ"""
@@ -220,18 +242,26 @@ def save_to_database(data):
             conn.close()
 
 def main():
+    """Основная функция для парсинга и сохранения"""
     logger.info("Запуск парсера валютных курсов")
     logger.info(f"Используется БД: {DB_PATH}")
     
-    # Проверяем права записи
+    # Проверка прав доступа
     if not os.access(DB_DIR, os.W_OK):
         logger.error(f"Нет прав на запись в директорию: {DB_DIR}")
         return
     
-    # Инициализация базы данных
-    if not init_database():
-        logger.error("Не удалось инициализировать базу данных")
-        return
+    # Инициализация БД только при первом запуске
+    if not os.path.exists(DB_PATH):
+        logger.info("Первоначальная инициализация БД")
+        if not init_database():
+            logger.error("Не удалось инициализировать базу данных")
+            return
+    else:
+        logger.info("Проверка структуры БД")
+        if not check_database_initialized():
+            logger.error("Проблемы с структурой БД")
+            return
     
     # Парсинг данных
     currency_data = parse_currency_data()
@@ -242,7 +272,7 @@ def main():
     else:
         logger.warning("Нет данных для сохранения")
     
-    # Проверяем размер БД
+    # Проверка размера БД
     if os.path.exists(DB_PATH):
         size = os.path.getsize(DB_PATH) / 1024
         logger.info(f"Размер БД: {size:.2f} KB")
