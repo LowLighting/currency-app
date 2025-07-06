@@ -3,22 +3,25 @@ version: '1'
 services:
   web:
     type: web
-    build: .
+    build:
+      context: .
     ports:
-      80:5000
+      80: 5000
     volumes:
-      - data:/app/data
+      - name: currency-data
+        mount: /app/data
 
 jobs:
   parser:
     type: cron
-    schedule: "0 5-14 * * *"
-    build: .
+    schedule: "0 5-14 * * *"  # каждый час с 5 до 14
+    build:
+      context: .
     command: ["python", "parser.py"]
     volumes:
-      - data:/app/data
+      - name: currency-data
+        mount: /app/data
 
 volumes:
-  data:
-    name: currency-data
+  currency-data:
     size: 1GB
