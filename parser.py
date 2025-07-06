@@ -9,8 +9,7 @@ import sys
 import os
 
 # Исправленный абсолютный путь
-DB_DIR = '/app/data'
-DB_PATH = os.path.join(DB_DIR, 'currency_data.db')
+DB_PATH = "/app/data/courses.db"
 
 def setup_logger():
     """Настраивает логгер для Docker"""
@@ -38,7 +37,7 @@ def init_database():
         return True
 
     logger.info(f"Создание новой БД: {DB_PATH}")
-    os.makedirs(DB_DIR, exist_ok=True)
+    # os.makedirs(DB_DIR, exist_ok=True)
     
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -67,7 +66,7 @@ def init_database():
         
         # Устанавливаем права
         os.chmod(DB_PATH, 0o660)
-        os.chmod(DB_DIR, 0o770)
+        # os.chmod(DB_DIR, 0o770)
         return True
         
     except sqlite3.Error as e:
@@ -247,9 +246,9 @@ def main():
     logger.info(f"Используется БД: {DB_PATH}")
     
     # Проверка прав доступа
-    if not os.access(DB_DIR, os.W_OK):
-        logger.error(f"Нет прав на запись в директорию: {DB_DIR}")
-        return
+    # if not os.access(DB_DIR, os.W_OK):
+    #     logger.error(f"Нет прав на запись в директорию: {DB_DIR}")
+    #     return
     
     # Инициализация БД только при первом запуске
     if not os.path.exists(DB_PATH):
