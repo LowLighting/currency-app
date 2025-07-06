@@ -9,8 +9,7 @@ import sys
 import os
 
 # Путь к базе данных (должен совпадать с render.yaml)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
+DB_PATH = '/app/data/currency_data.db'
 
 def setup_logger():
     """Настраивает логгер для Render"""

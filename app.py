@@ -6,8 +6,7 @@ from datetime import datetime
 from analysis import generate_report  # Импорт функции генерации отчета
 
 app = Flask(__name__)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
+DB_PATH = '/app/data/currency_data.db'
 
 # Настройка логгера
 logging.basicConfig(

@@ -9,8 +9,8 @@ from xlsxwriter.utility import xl_col_to_name
 import io
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = '/app/data/currency_data.db'
 
 # Настройка логирования
 def setup_logger():
