@@ -149,6 +149,21 @@ def create_excel_bytes(df):
     
     try:
         # Создаем буфер в памяти
+        sort_columns = ['Дата и время', 'Валюта', 'Наименование']
+        
+        # Фильтруем только существующие столбцы
+        existing_columns = [col for col in sort_columns if col in df.columns]
+        
+        if existing_columns:
+            # Сортируем DataFrame in-place
+            df.sort_values(
+                by=existing_columns,
+                ascending=[False] * len(existing_columns),
+                inplace=True
+            )
+            logger.info(f"Данные отсортированы по столбцам: {existing_columns} по убыванию")
+        else:
+            logger.warning("Нет столбцов для сортировки. Данные не отсортированы.")
         output = io.BytesIO()
         
         # Создаем Excel writer для работы с буфером
