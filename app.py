@@ -1,10 +1,13 @@
 from flask import Flask, send_file, render_template, Response
 import io
 import logging
+import os
 from datetime import datetime
 from analysis import generate_report  # Импорт функции генерации отчета
 
 app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'data', 'currency_data.db')
 
 # Настройка логгера
 logging.basicConfig(
@@ -12,6 +15,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('web_app')
+
+@app.before_request
+def check_permissions():
+    if os.access(DB_PATH, os.W_OK):
+        logger.warning("SECURITY WARNING: Application has write access to database!")
 
 @app.route('/')
 def index():
