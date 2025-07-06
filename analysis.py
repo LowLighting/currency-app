@@ -149,7 +149,7 @@ def create_excel_bytes(df):
     
     try:
         # Создаем буфер в памяти
-        sort_columns = ['Дата и время', 'Валюта', 'Наименование']
+        sort_columns = ['Дата и время', 'Наименование', 'Валюта']
         
         # Фильтруем только существующие столбцы
         existing_columns = [col for col in sort_columns if col in df.columns]
