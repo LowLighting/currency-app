@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Копируем код приложения (без данных)
-COPY app.py parser.py entrypoint.sh ./
+COPY app.py parser.py entrypoint_.sh ./
 COPY templates/ /app/templates/
 
 # Копируем папку с данными отдельно
