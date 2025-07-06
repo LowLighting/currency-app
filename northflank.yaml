@@ -1,0 +1,35 @@
+version: "1"
+
+project:
+  name: currency-app
+
+volumes:
+  currency-data:
+    type: ssd
+    size: 1
+
+services:
+  web:
+    containers:
+      web-container:
+        build:
+          context: .
+        ports:
+          - internal: 5000
+            external: 80
+        volumeMounts:
+          - name: currency-data
+            mountPath: /app/data
+
+jobs:
+  parser:
+    type: cron
+    schedule: "0 5-14 * * *"  # каждый час с 5 до 14 UTC
+    containers:
+      parser-container:
+        build:
+          context: .
+        command: ["python", "parser.py"]
+        volumeMounts:
+          - name: currency-data
+            mountPath: /app/data
