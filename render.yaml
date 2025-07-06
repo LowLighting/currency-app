@@ -1,0 +1,53 @@
+# render.yaml
+services:
+  - type: web
+    name: currency-web-app
+    env: python
+    region: frankfurt  # Европейский регион
+    plan: free  # Бесплатный тариф
+    
+    # Настройки сборки
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      
+    # Команда запуска
+    startCommand: python app.py
+    
+    # Переменные окружения
+    envVars:
+      - key: DB_PATH
+        value: /var/data/courses.db
+      - key: PYTHONUNBUFFERED
+        value: 1
+    
+    # Постоянное хранилище для SQLite
+    disk:
+      name: currency-data
+      mountPath: /var/data
+      sizeGB: 1  # 1GB бесплатно
+
+jobs:
+  - type: cron
+    name: currency-parser
+    region: frankfurt
+    plan: free
+    schedule: "0 5-14 * * *"  # Каждый час с 5 до 14 по UTC (07:00-16:00 МСК)
+    
+    # Настройки сборки (аналогично веб-сервису)
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      
+    # Команда запуска парсера
+    runCommand: python parser.py
+    
+    # Переменные окружения (должны совпадать с веб-сервисом)
+    envVars:
+      - key: DB_PATH
+        value: /var/data/courses.db
+    
+    # То же хранилище что и у веб-сервиса
+    disk:
+      name: currency-data
+      mountPath: /var/data
