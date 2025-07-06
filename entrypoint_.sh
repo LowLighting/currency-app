@@ -1,23 +1,29 @@
 #!/bin/sh
 set -e
 
-# Выбор режима работы на основе первого аргумента
-mode=${1:-web}
+# Проверка и инициализация БД
+DB_FILE="/app/data/currency_data.db"
+if [ ! -f "$DB_FILE" ]; then
+    echo "Database file not found. Creating new database..."
+    touch "$DB_FILE"
+    sqlite3 "$DB_FILE" "CREATE TABLE IF NOT EXISTS currencies (id INTEGER PRIMARY KEY, code TEXT, rate REAL, date TEXT);"
+fi
 
-case $mode in
-    web|app|server)
-        echo "Запуск веб-сервера"
-        exec python app.py
+# Устанавливаем правильные права на БД
+chmod 660 "$DB_FILE"
+
+# Запуск приложения
+case "$1" in
+    web)
+        echo "Starting web server"
+        exec python /app/app.py
         ;;
-    parser|job|worker)
-        echo "Запуск парсера"
-        exec python parser.py
+    parser)
+        echo "Starting parser"
+        exec python /app/parser.py
         ;;
     *)
-        echo "Неизвестный режим: $mode"
-        echo "Доступные команды:"
-        echo "  web    - запуск веб-сервера"
-        echo "  parser - запуск парсера"
+        echo "Unknown mode: $1"
         exit 1
         ;;
 esac

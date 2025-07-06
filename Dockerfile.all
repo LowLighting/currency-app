@@ -1,45 +1,37 @@
 FROM python:3.10-slim
 
-# Устанавливаем зависимости с явным указанием yes
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    wget \
-    curl \
-    sqlite3 \
-    libsqlite3-0 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    apt-get install -y wget curl sqlite3 libsqlite3-0 && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get clean
 
-# Создаем пользователя и группы
-RUN addgroup --system --gid 1000 app && \
-    adduser --system --uid 1000 --ingroup app --no-create-home app
+RUN adduser --disabled-password --gecos '' --uid 1000 appuser
 
-# Создаем все необходимые директории
-RUN mkdir -p /app/templates
+RUN mkdir -p /app/templates /app/data
 WORKDIR /app
 
-# Копируем зависимости отдельно для лучшего кэширования
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения (без данных)
-COPY app.py parser.py entrypoint_.sh ./
-COPY templates/ /app/templates/
+COPY . .
 
-# Копируем папку с данными отдельно
-COPY data/ /app/data/
+# Создаем БД по умолчанию, если её нет
+RUN if [ ! -f "/app/data/currency_data.db" ]; then \
+        touch /app/data/currency_data.db && \
+        sqlite3 /app/data/currency_data.db "CREATE TABLE IF NOT EXISTS currencies (id INTEGER PRIMARY KEY, code TEXT, rate REAL, date TEXT);"; \
+    fi
 
-# Устанавливаем правильные права (без рекурсивного chmod на всё)
-RUN chown -R 1000:1000 /app && \
-    chmod +x entrypoint_.sh && \
+RUN chown -R appuser:appuser /app && \
+    chmod +x /app/entrypoint_.sh && \
     chmod 770 /app/data && \
-    find /app/data -type d -exec chmod 770 {} \; && \
-    find /app/data -type f -exec chmod 660 {} \;
+    chmod 660 /app/data/currency_data.db
 
-USER app
+# Исправляем форматы файлов
+RUN sed -i 's/\r$//' /app/entrypoint_.sh /app/app.py /app/parser.py || true
+
+USER appuser
 EXPOSE 5000
 
-# Точка входа и команда по умолчанию
-ENTRYPOINT ["/app/entrypoint_.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint_.sh"]
 CMD ["web"]
