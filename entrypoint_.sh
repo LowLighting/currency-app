@@ -16,7 +16,6 @@ ls -la "$APP_DIR"
 echo ">> Listing $DATA_DIR:"
 ls -la "$DATA_DIR" || echo "No $DATA_DIR"
 
-# Создание базы, если её нет
 if [ ! -f "$DB_FILE" ]; then
     echo ">> Database file not found. Creating..."
     sqlite3 "$DB_FILE" "CREATE TABLE IF NOT EXISTS currencies (id INTEGER PRIMARY KEY, code TEXT, rate REAL, date TEXT);"
@@ -26,7 +25,6 @@ fi
 
 chmod 660 "$DB_FILE"
 
-# Основной запуск
 case "$1" in
     web)
         echo ">> Starting web server (app.py)..."
@@ -39,7 +37,7 @@ case "$1" in
     *)
         echo ">> Unknown or missing argument: '$1'"
         echo ">> Please pass 'web' or 'parser' as CMD argument."
-        echo ">> Sleeping for debug..."
+        echo ">> Sleeping 60 seconds for debugging..."
         sleep 60
         exit 1
         ;;

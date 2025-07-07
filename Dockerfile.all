@@ -1,39 +1,34 @@
 FROM python:3.10-slim
 
-# Установка зависимостей
+# Установка системных зависимостей
 RUN apt-get update && \
     apt-get install -y wget curl sqlite3 libsqlite3-0 && \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
-# Создание пользователя
+# Создаем пользователя
 RUN adduser --disabled-password --gecos '' --uid 1000 appuser
 
-# Создание рабочей директории
 WORKDIR /app
 
-# Копирование зависимостей и установка pip-пакетов
+# Копируем зависимости и устанавливаем Python-пакеты
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Копируем все файлы
+# Копируем все остальные файлы
 COPY . .
 
-# Удаляем создание БД — оно будет в entrypoint_.sh
-# Проверка на наличие Windows-формата и права
+# Исправляем форматы строк (CRLF -> LF) и права
 RUN sed -i 's/\r$//' /app/entrypoint_.sh /app/app.py /app/parser.py || true
-
-# Устанавливаем права на скрипты
-RUN chown -R appuser:appuser /app && \
-    chmod +x /app/entrypoint_.sh
+RUN chmod +x /app/entrypoint_.sh
 
 # Меняем пользователя
 USER appuser
 
-# Открываем порт
+# Открываем порт 5000
 EXPOSE 5000
 
 # Точка входа и аргумент по умолчанию
-ENTRYPOINT ["cat", "/app/entrypoint_.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint_.sh"]
 CMD ["web"]
