@@ -7,27 +7,17 @@ RUN apt-get update && \
 
 RUN adduser --disabled-password --gecos '' --uid 1000 appuser
 
-RUN mkdir -p /app/templates /app/data
 WORKDIR /app
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -U pip && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Создаем БД по умолчанию, если её нет
-RUN if [ ! -f "/app/data/currency_data.db" ]; then \
-        touch /app/data/currency_data.db && \
-        sqlite3 /app/data/currency_data.db "CREATE TABLE IF NOT EXISTS currencies (id INTEGER PRIMARY KEY, code TEXT, rate REAL, date TEXT);"; \
-    fi
-
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/entrypoint_.sh && \
-    chmod 770 /app/data && \
-    chmod 660 /app/data/currency_data.db
+    chmod 770 /app/data || true
 
-# Исправляем форматы файлов
 RUN sed -i 's/\r$//' /app/entrypoint_.sh /app/app.py /app/parser.py || true
 
 USER appuser
