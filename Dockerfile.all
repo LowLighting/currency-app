@@ -35,5 +35,5 @@ USER appuser
 EXPOSE 5000
 
 # Точка входа и аргумент по умолчанию
-ENTRYPOINT ["/bin/sh", "/app/entrypoint_.sh"]
+ENTRYPOINT ["cat", "/app/entrypoint_.sh"]
 CMD ["web"]
